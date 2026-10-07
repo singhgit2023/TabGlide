@@ -76,7 +76,15 @@ struct SetupView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 24) {
-                Label("WindowHop", systemImage: "rectangle.on.rectangle").font(.system(size: 18, weight: .semibold)).padding(.top, 14)
+                HStack(spacing: 10) {
+                    Image(nsImage: BrandIcon.app)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 38, height: 38)
+                        .accessibilityHidden(true)
+                    Text("WindowHop").font(.system(size: 18, weight: .semibold))
+                }.padding(.top, 14)
                 TextField("Search settings…", text: $navigation.search).textFieldStyle(.roundedBorder)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("SETTINGS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10)
@@ -100,6 +108,8 @@ struct SetupView: View {
                             .foregroundStyle(.secondary).font(.system(size: 13))
                     }
                     if navigation.page == "General" {
+                        UpdateSettings()
+                        Divider()
                         sectionTitle("APP APPEARANCE")
                         Picker("Appearance", selection: $model.appTheme) {
                             ForEach(["System", "Light", "Dark"], id: \.self) { Text($0).tag($0) }

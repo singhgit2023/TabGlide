@@ -227,9 +227,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.applyTheme()
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "rectangle.on.rectangle", accessibilityDescription: "WindowHop")
+        statusItem.button?.image = BrandIcon.menuBar
         let menu = NSMenu()
         menu.addItem(withTitle: "WindowHop Settings…", action: #selector(showSetup), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Preview Switcher", action: #selector(showPreview), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit WindowHop", action: #selector(quit), keyEquivalent: "q").target = self
@@ -659,6 +660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+    @objc func checkForUpdates() { UpdateChecker.shared.check(showAlert: true) }
     @objc func quit() { NSApp.terminate(nil) }
 }
 
