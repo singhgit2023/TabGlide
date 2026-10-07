@@ -125,6 +125,10 @@ struct SetupView: View {
                     } else {
                         sectionTitle("BEHAVIOR")
                         if dock {
+                            Picker("Layout", selection: $model.compactDock) {
+                                Text("Preview grid").tag(false)
+                                Text("Compact vertical stack").tag(true)
+                            }.pickerStyle(.segmented)
                             Toggle("Show previews when hovering over Dock icons", isOn: $model.dockPreviews)
                             settingSlider("Hover delay", value: $model.dockDelay, range: 0.1...1, step: 0.05, suffix: "s")
                             Text("Click a thumbnail to switch. Close, minimize and quit keep the panel open.").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -133,10 +137,10 @@ struct SetupView: View {
                             Text("Option + Tab switches to the previous window. Hold Option to show the picker; Shift reverses direction. Set delay to zero to show it immediately.").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         Divider()
-                        AppearanceControls(appearance: appearance)
+                        AppearanceControls(appearance: appearance, compact: dock && model.compactDock)
                         Divider()
                         sectionTitle("PREVIEW")
-                        AppearancePreviewGrid(appearance: appearance.wrappedValue)
+                        AppearancePreviewGrid(appearance: appearance.wrappedValue, compact: dock && model.compactDock)
                         Text("Six sample windows, scaled to fit. Click a card to compare selected and unselected styles.")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                         HStack {
@@ -157,25 +161,27 @@ private final class PreviewSelection: ObservableObject {
 
 private struct AppearancePreviewGrid: View {
     let appearance: PreviewAppearance
+    var compact = false
+    private var cardWidth: Double { compact ? 400 : appearance.width }
     @StateObject private var selection = PreviewSelection()
     private let samples = [
         ("Project workspace", "Editor"), ("A little inspiration", "Browser"),
         ("Documents", "Finder"), ("Today's notes", "Notes"),
         ("Your favorite playlist", "Music"), ("Team conversation", "Messages")
     ]
-    private var columns: Int { max(1, min(6, Int(appearance.columns))) }
-    private var sceneWidth: Double { Double(columns) * appearance.width + Double(columns - 1) * appearance.spacing + 24 }
+    private var columns: Int { compact ? 1 : max(1, min(6, Int(appearance.columns))) }
+    private var sceneWidth: Double { Double(columns) * cardWidth + Double(columns - 1) * appearance.spacing + 24 }
     private var sceneHeight: Double {
         let rows = (samples.count + columns - 1) / columns
-        return Double(rows) * (appearance.imageHeight + 66) + Double(rows - 1) * appearance.spacing + 24
+        return Double(rows) * (compact ? 74 : appearance.imageHeight + 66) + Double(rows - 1) * appearance.spacing + 24
     }
     var body: some View {
         GeometryReader { geometry in
             let scale = min(1, geometry.size.width / sceneWidth)
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(appearance.width), spacing: appearance.spacing), count: columns), spacing: appearance.spacing) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: appearance.spacing), count: columns), spacing: appearance.spacing) {
                 ForEach(samples.indices, id: \.self) { index in
                     WindowPreviewCard(window: WindowEntry(element: nil, app: nil, title: samples[index].0, appName: samples[index].1, minimized: false),
-                                      thumbnail: nil, selected: selection.index == index, appearance: appearance,
+                                      thumbnail: nil, selected: selection.index == index, appearance: appearance, compact: compact,
                                       choose: { selection.index = index }, action: { _ in })
                 }
             }
@@ -191,8 +197,10 @@ private struct AppearancePreviewGrid: View {
 
 private struct AppearanceControls: View {
     @Binding var appearance: PreviewAppearance
+    var compact = false
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            if !compact {
             sectionTitle("WINDOW PREVIEW SIZE")
             Toggle("Lock aspect ratio (16:10)", isOn: $appearance.lockAspect)
             settingSlider("Preview width", value: $appearance.width, range: 260...460, step: 10, suffix: "px")
@@ -200,6 +208,7 @@ private struct AppearanceControls: View {
             Text("Images keep their original proportions and fit inside the preview.").font(.system(size: 12)).foregroundStyle(.secondary)
             settingSlider("Maximum columns", value: $appearance.columns, range: 1...6, step: 1, suffix: "")
             Divider()
+            }
             sectionTitle("BACKGROUND")
             Picker("Style", selection: $appearance.material) {
                 ForEach(["Liquid", "Frosted", "Clear"], id: \.self) { Text($0).tag($0) }

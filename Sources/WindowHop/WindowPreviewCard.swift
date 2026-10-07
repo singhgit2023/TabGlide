@@ -6,14 +6,40 @@ struct WindowPreviewCard: View {
     let thumbnail: NSImage?
     let selected: Bool
     var appearance = PreviewAppearance()
+    var compact = false
     let choose: () -> Void
     let action: (PreviewAction) -> Void
 
     var body: some View {
+        Group {
+        if compact {
+            HStack(spacing: 10) {
+                Button(action: choose) {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: appearance.rounded ? 8 : 0).fill(.black.opacity(0.15))
+                            Image(nsImage: thumbnail ?? window.icon).resizable().scaledToFit().padding(4)
+                        }.frame(width: 76, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: appearance.rounded ? 8 : 0))
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(window.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                            HStack(spacing: 5) {
+                                Image(nsImage: window.icon).resizable().scaledToFit().frame(width: 16, height: 16)
+                                Text(window.minimized ? "Minimized" : window.appName).font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).help(window.title).accessibilityLabel("Switch to " + window.title)
+                controls
+            }.frame(height: 54)
+        } else {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Button(action: choose) {
-                    Text(window.title + " — " + window.appName)
+                    HStack(spacing: 7) {
+                        Image(nsImage: window.icon).resizable().scaledToFit().frame(width: 22, height: 22)
+                        Text(window.title + " — " + window.appName)
+                    }
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1).truncationMode(.middle)
@@ -24,16 +50,7 @@ struct WindowPreviewCard: View {
                         .contentShape(Capsule())
                 }.buttonStyle(.plain).help(window.title + " — " + window.appName)
 
-                HStack(spacing: 0) {
-                    trafficLight(.red, symbol: "xmark", label: "Close window") { action(.close) }
-                    trafficLight(.yellow, symbol: window.minimized ? "plus" : "minus",
-                                 label: window.minimized ? "Restore window" : "Minimize window") { action(.minimize) }
-                    trafficLight(.green, symbol: "power", label: "Quit " + window.appName + " (all windows)") { action(.quit) }
-                }
-                .padding(.horizontal, 8).frame(height: 36)
-                .background(Capsule().fill(.white.opacity(0.07)))
-                .overlay(Capsule().strokeBorder(.white.opacity(0.11), lineWidth: 1))
-                .disabled(window.element == nil)
+                controls
             }
 
             Button(action: choose) {
@@ -56,8 +73,10 @@ struct WindowPreviewCard: View {
                 .contentShape(RoundedRectangle(cornerRadius: appearance.rounded ? 18 : 0))
             }.buttonStyle(.plain).accessibilityLabel("Switch to " + window.title)
         }
+        }
+        }
         .padding(10)
-        .frame(maxWidth: appearance.width)
+        .frame(maxWidth: compact ? 400 : appearance.width)
         .background(PreviewSurface(appearance: appearance, radius: appearance.radius))
         .overlay(RoundedRectangle(cornerRadius: appearance.radius).strokeBorder(
             selected ? Color.accentColor.opacity(0.8) : Color.primary.opacity(0.13), lineWidth: selected ? 2 : 1))
@@ -65,6 +84,19 @@ struct WindowPreviewCard: View {
             .strokeBorder(Color.primary.opacity(appearance.material == "Liquid" ? 0.06 : 0), lineWidth: 1))
         .opacity(selected ? 1 : appearance.inactiveOpacity)
 
+    }
+
+    private var controls: some View {
+                HStack(spacing: 0) {
+                    trafficLight(.red, symbol: "xmark", label: "Close window") { action(.close) }
+                    trafficLight(.yellow, symbol: window.minimized ? "plus" : "minus",
+                                 label: window.minimized ? "Restore window" : "Minimize window") { action(.minimize) }
+                    trafficLight(.green, symbol: "power", label: "Quit " + window.appName + " (all windows)") { action(.quit) }
+                }
+                .padding(.horizontal, 8).frame(height: 36)
+                .background(Capsule().fill(.white.opacity(0.07)))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.11), lineWidth: 1))
+                .disabled(window.element == nil)
     }
 
     private func trafficLight(_ color: Color, symbol: String, label: String, action: @escaping () -> Void) -> some View {

@@ -32,6 +32,10 @@ final class SwitcherModel: ObservableObject {
         NSApp.appearance = appTheme == "System" ? nil : NSAppearance(named: appTheme == "Light" ? .aqua : .darkAqua)
     }
 
+    @Published var compactDock = UserDefaults.standard.bool(forKey: "compactDock") {
+        didSet { UserDefaults.standard.set(compactDock, forKey: "compactDock") }
+    }
+    var compactPreview: Bool { dockMode && compactDock }
     @Published var dockAppearance = PreviewAppearance.load("dockAppearance") { didSet { dockAppearance.save("dockAppearance") } }
     @Published var switcherAppearance = PreviewAppearance.load("switcherAppearance") { didSet { switcherAppearance.save("switcherAppearance") } }
     @Published var dockDelay = UserDefaults.standard.object(forKey: "dockDelay") as? Double ?? 0.3 { didSet { UserDefaults.standard.set(dockDelay, forKey: "dockDelay") } }
@@ -99,7 +103,7 @@ struct SwitcherView: View {
                         ForEach(Array(model.windows.enumerated()), id: \.element.id) { index, window in
                             WindowPreviewCard(window: window,
                                 thumbnail: model.showPreviews ? model.thumbnails[window.id] : nil,
-                                selected: index == model.selected, appearance: model.appearance,
+                                selected: index == model.selected, appearance: model.appearance, compact: model.compactPreview,
                                 choose: { choose(index) }, action: { action(index, $0) })
                             .id(index)
                             .onContinuousHover { phase in
@@ -409,12 +413,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Larger thumbnail cards wrap after five columns, or earlier on smaller screens.
         let availableWidth = min(CGFloat(1600), screen.visibleFrame.width - 48)
         let appearance = model.appearance
-        let stride = appearance.width + appearance.spacing
+        let compact = model.compactPreview
+        let stride = (compact ? 400 : appearance.width) + appearance.spacing
         let maxColumns = max(1, min(Int(appearance.columns), Int((availableWidth - 52 + appearance.spacing) / stride)))
-        model.columns = min(maxColumns, max(1, model.windows.count))
-        let width = min(availableWidth, max(560, CGFloat(model.columns) * stride - appearance.spacing + 52))
+        model.columns = compact ? 1 : min(maxColumns, max(1, model.windows.count))
+        let width = min(availableWidth, max(compact ? 452 : 560, CGFloat(model.columns) * stride - appearance.spacing + 52))
         let rows = (max(1, model.windows.count) + model.columns - 1) / model.columns
-        let contentHeight = CGFloat(rows) * (appearance.imageHeight + 66 + appearance.spacing) - appearance.spacing + 4
+        let contentHeight = CGFloat(rows) * ((compact ? 74 : appearance.imageHeight + 66) + appearance.spacing) - appearance.spacing + 4
         let height = min(contentHeight + 124, screen.visibleFrame.height - 64)
         if overlay == nil {
             let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
