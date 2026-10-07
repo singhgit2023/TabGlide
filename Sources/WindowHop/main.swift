@@ -228,6 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UpdateChecker.shared.start()
         model.applyTheme()
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -665,7 +666,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    @objc func checkForUpdates() { UpdateChecker.shared.check(showAlert: true) }
+    @objc func checkForUpdates() { UpdateChecker.shared.check() }
     @objc func quit() { NSApp.terminate(nil) }
 }
 
