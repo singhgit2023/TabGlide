@@ -12,7 +12,9 @@ Download the release ZIP, extract it, and move WindowHop.app to Applications bef
 
 Accessibility enables switching and Dock previews. Screen Recording is optional for thumbnails. Use the General settings panel for permission checks and recovery.
 
-Updates are currently downloaded manually from GitHub Releases. Automatic update checks are not included in this version.
+Use Check for Updates in the menu bar or General settings to compare the installed version with the latest public GitHub release. When a newer version is available, Download Update opens its compatible ZIP in your browser (or View Release if no compatible asset is attached). Install manually by replacing the app in Applications. Checks run only when requested; automatic installation is not included.
+
+Version 1.0.1 (build 2) adds the update checker and branded menu-bar and Settings icons. To test the update-available flow from this build, publish a stable v1.0.2 or later release. The original v1.0.0 app has no update checker.
 
 
 A native macOS menu bar app for switching between individual windows with **Option + Tab** (Alt + Tab on a PC keyboard). Built with Swift, AppKit, and SwiftUI. Requires macOS 13 or later; window thumbnails require macOS 14 or later.
