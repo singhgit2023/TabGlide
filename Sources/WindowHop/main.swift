@@ -83,12 +83,14 @@ struct SwitcherView: View {
     let choose: (Int) -> Void
     let action: (Int, PreviewAction) -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: model.dockMode ? 0 : 20) {
+            if !model.dockMode {
             HStack {
                 Image(systemName: "rectangle.on.rectangle").foregroundStyle(.mint)
                 Text(model.dockMode ? model.dockAppName : "WindowHop").font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Text("\(model.windows.count) windows").foregroundStyle(.secondary).font(.system(size: 12))
+            }
             }
             if model.dockMode && model.windows.isEmpty {
                 VStack(spacing: 10) {
@@ -116,13 +118,7 @@ struct SwitcherView: View {
                 .onChange(of: model.selected) { value in if model.selectionFromHover { return }; withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(value, anchor: .center) } }
             }
             }
-            if model.dockMode {
-                HStack {
-                    Text("Click a window to switch").foregroundStyle(.mint)
-                    Spacer()
-                    Text("Close · Minimize · Quit app").foregroundStyle(.secondary)
-                }.font(.system(size: 11, weight: .medium))
-            } else {
+            if !model.dockMode {
             HStack(spacing: 6) {
                 Text("⌥ TAB").foregroundStyle(.primary)
                 Text("next").padding(.trailing, 14)
@@ -135,7 +131,7 @@ struct SwitcherView: View {
             }.font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             }
         }
-        .padding(24).background(PreviewSurface(appearance: model.appearance, radius: model.appearance.rounded ? 24 : 0)).preferredColorScheme(model.colorScheme)
+        .padding(model.dockMode ? 8 : 24).background(PreviewSurface(appearance: model.appearance, radius: model.appearance.rounded ? 24 : 0)).preferredColorScheme(model.colorScheme)
     }
 }
 
@@ -415,13 +411,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let availableWidth = min(CGFloat(1600), screen.visibleFrame.width - 48)
         let appearance = model.appearance
         let compact = model.compactPreview
+        let outerWidth: CGFloat = model.dockMode ? 20 : 52
         let stride = (compact ? 400 : appearance.width) + appearance.spacing
-        let maxColumns = max(1, min(Int(appearance.columns), Int((availableWidth - 52 + appearance.spacing) / stride)))
+        let maxColumns = max(1, min(Int(appearance.columns), Int((availableWidth - outerWidth + appearance.spacing) / stride)))
         model.columns = compact ? 1 : min(maxColumns, max(1, model.windows.count))
-        let width = min(availableWidth, max(compact ? 452 : 560, CGFloat(model.columns) * stride - appearance.spacing + 52))
+        let cardsWidth = CGFloat(model.columns) * stride - appearance.spacing + outerWidth
+        let width = min(availableWidth, model.dockMode ? cardsWidth : max(560, cardsWidth))
         let rows = (max(1, model.windows.count) + model.columns - 1) / model.columns
         let contentHeight = CGFloat(rows) * ((compact ? 74 : appearance.imageHeight + 66) + appearance.spacing) - appearance.spacing + 4
-        let height = min(contentHeight + 124, screen.visibleFrame.height - 64)
+        let height = min(model.dockMode ? (model.windows.isEmpty ? 160 : contentHeight + 16) : contentHeight + 124, screen.visibleFrame.height - 64)
         if overlay == nil {
             let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.level = .popUpMenu
@@ -456,6 +454,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             frame.origin.y = min(max(frame.minY, screen.visibleFrame.minY + 8), screen.visibleFrame.maxY - height - 8)
         }
         overlay?.setFrame(frame, display: true)
+        // Animate the content, keeping the panel's hit area fixed above the Dock.
+        // Layer animations disappear with the old content view on a rapid re-hover.
+        if model.dockMode && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+           let layer = overlay?.contentView?.layer {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = 0.18
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(fade, forKey: "dockPreviewOpening")
+        }
         overlay?.orderFrontRegardless()
         startPreviews()
     }
