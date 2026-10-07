@@ -16,6 +16,7 @@ struct WindowEntry: Identifiable {
     let title: String
     let appName: String
     let minimized: Bool
+    var browserTab: BrowserTab? = nil
     var bounds: CGRect? = nil
     var icon: NSImage { app?.icon ?? NSImage(systemSymbolName: "macwindow", accessibilityDescription: nil)! }
 }
@@ -32,6 +33,38 @@ final class SwitcherModel: ObservableObject {
         NSApp.appearance = appTheme == "System" ? nil : NSAppearance(named: appTheme == "Light" ? .aqua : .darkAqua)
     }
 
+    @Published var switcherStyle = UserDefaults.standard.string(forKey: "switcherStyle") ?? "Cards" {
+        didSet { UserDefaults.standard.set(switcherStyle, forKey: "switcherStyle") }
+    }
+    @Published var switcherPlacement = UserDefaults.standard.string(forKey: "switcherPlacement") ?? "Center" {
+        didSet { UserDefaults.standard.set(switcherPlacement, forKey: "switcherPlacement") }
+    }
+    @Published var shortcut = UserDefaults.standard.string(forKey: "switcherShortcut") ?? "Option + Tab" {
+        didSet { UserDefaults.standard.set(shortcut, forKey: "switcherShortcut") }
+    }
+    var shortcutFlag: CGEventFlags { shortcut == "Command + Tab" ? .maskCommand : shortcut == "Control + Tab" ? .maskControl : .maskAlternate }
+    var modifierLabel: String { shortcut == "Command + Tab" ? "⌘" : shortcut == "Control + Tab" ? "⌃" : "⌥" }
+    @Published var browserTabsEnabled = UserDefaults.standard.bool(forKey: "browserTabsEnabled") {
+        didSet { UserDefaults.standard.set(browserTabsEnabled, forKey: "browserTabsEnabled") }
+    }
+    @Published var searchHotkey = UserDefaults.standard.string(forKey: "searchHotkey") ?? "Shift + Command + L" {
+        didSet { UserDefaults.standard.set(searchHotkey, forKey: "searchHotkey") }
+    }
+    @Published var globalSearch = false
+    func matchesSearchHotkey(_ key: Int64, flags: CGEventFlags) -> Bool {
+        let modifiers = flags.intersection([.maskCommand, .maskAlternate, .maskControl, .maskShift])
+        switch searchHotkey {
+        case "Shift + Command + L": return key == 37 && modifiers == [.maskShift, .maskCommand]
+        case "Option + Command + Space": return key == 49 && modifiers == [.maskAlternate, .maskCommand]
+        case "Control + Option + Space": return key == 49 && modifiers == [.maskControl, .maskAlternate]
+        default: return false
+        }
+    }
+    @Published var browserStatus = ""
+    @Published var searching = false
+    @Published var query = "" { didSet { userNavigated = true; filterResults(); selected = 0 } }
+    var sourceWindows: [WindowEntry] = []
+    var listSwitcher: Bool { !dockMode && (globalSearch || switcherStyle == "List") }
     @Published var compactDock = UserDefaults.standard.bool(forKey: "compactDock") {
         didSet { UserDefaults.standard.set(compactDock, forKey: "compactDock") }
     }
@@ -62,16 +95,19 @@ final class SwitcherModel: ObservableObject {
     @Published var includeMinimized = UserDefaults.standard.object(forKey: "includeMinimized") as? Bool ?? true {
         didSet { UserDefaults.standard.set(includeMinimized, forKey: "includeMinimized") }
     }
+    var userNavigated = false
     var selectionFromHover = false
     var lastPointerLocation = NSEvent.mouseLocation
     func hover(_ index: Int) {
         let location = NSEvent.mouseLocation
         guard location != lastPointerLocation else { return }
         lastPointerLocation = location
+        userNavigated = true
         selectionFromHover = true
         selected = index
     }
     func step(_ delta: Int) {
+        userNavigated = true
         selectionFromHover = false
         guard !windows.isEmpty else { return }
         selected = (selected + delta % windows.count + windows.count) % windows.count
@@ -87,11 +123,12 @@ struct SwitcherView: View {
             if !model.dockMode {
             HStack {
                 Image(systemName: "rectangle.on.rectangle").foregroundStyle(.mint)
-                Text(model.dockMode ? model.dockAppName : "WindowHop").font(.system(size: 16, weight: .semibold))
+                Text(model.dockMode ? model.dockAppName : "TabGlide").font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Text("\(model.windows.count) windows").foregroundStyle(.secondary).font(.system(size: 12))
             }
             }
+            if !model.dockMode { SwitcherSearch(model: model) }
             if model.dockMode && model.windows.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "macwindow").font(.system(size: 32)).foregroundStyle(.secondary)
@@ -106,7 +143,7 @@ struct SwitcherView: View {
                             WindowPreviewCard(window: window,
                                 thumbnail: model.showPreviews ? model.thumbnails[window.id] : nil,
                                 selected: index == model.selected, appearance: model.appearance, compact: model.compactPreview,
-                                choose: { choose(index) }, action: { action(index, $0) })
+                                choose: { choose(index) }, action: { if window.browserTab == nil { action(index, $0) } })
                             .id(index)
                             .onContinuousHover { phase in
                                 if case .active = phase { model.hover(index) }
@@ -120,14 +157,14 @@ struct SwitcherView: View {
             }
             if !model.dockMode {
             HStack(spacing: 6) {
-                Text("⌥ TAB").foregroundStyle(.primary)
+                Text(model.modifierLabel + " TAB").foregroundStyle(.primary)
                 Text("next").padding(.trailing, 14)
                 Text("⇧").foregroundStyle(.primary)
                 Text("reverse").padding(.trailing, 14)
                 Text("ESC").foregroundStyle(.primary)
                 Text("cancel")
                 Spacer()
-                Text("Release ⌥ to switch").foregroundStyle(.mint)
+                Text(model.searching ? "Enter to switch" : "Release " + model.modifierLabel + " to switch").foregroundStyle(.mint)
             }.font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             }
         }
@@ -139,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = SwitcherModel()
     var statusItem: NSStatusItem!
     var setupWindow: NSWindow?
+    var onboardingWindow: NSWindow?
     var overlay: NSPanel?
     var eventTap: CFMachPort?
     var eventSource: CFRunLoopSource?
@@ -155,9 +193,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var pickerSession = UUID()
     var switching = false
     var previewing = false
+    var browserSourceApp: NSRunningApplication?
+    var browserLoadedSession: UUID?
     var swallowedKeys = Set<Int64>()
     var cachedWindows: [WindowEntry] = []
-    let scanQueue = DispatchQueue(label: "WindowHop.windowScan", qos: .userInitiated)
+    let scanQueue = DispatchQueue(label: "TabGlide.windowScan", qos: .userInitiated)
     var scanning = false
     var scanQueued = false
     var recentWindows: [AXUIElement] = []
@@ -230,11 +270,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = BrandIcon.menuBar
         let menu = NSMenu()
-        menu.addItem(withTitle: "WindowHop Settings…", action: #selector(showSetup), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "TabGlide Settings…", action: #selector(showSetup), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Preview Switcher", action: #selector(showPreview), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Search Windows & Tabs…", action: #selector(openSearchMode), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Onboarding…", action: #selector(showOnboarding), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit WindowHop", action: #selector(quit), keyEquivalent: "q").target = self
+        menu.addItem(withTitle: "Quit TabGlide", action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -242,7 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshPermission()
         dockTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in self?.pollDock() }
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in self?.refreshPermission() }
-        if !model.shortcutReady || CommandLine.arguments.contains("--setup") { showSetup() }
+        if !UserDefaults.standard.bool(forKey: "onboardingCompleted") { showOnboarding() }
+        else if !model.shortcutReady || CommandLine.arguments.contains("--setup") { showSetup() }
         if CommandLine.arguments.contains("--preview") { showPreview() }
     }
 
@@ -333,7 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func installTap() {
-        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
         eventTap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: CGEventMask(mask), callback: { _, type, event, context in
             guard let context else { return Unmanaged.passUnretained(event) }
             let owner = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
@@ -351,22 +394,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
             return false
         }
+        if type == .leftMouseDown || type == .rightMouseDown {
+            if switching && !model.dockMode && overlay?.frame.contains(NSEvent.mouseLocation) != true { dismiss() }
+            return false
+        }
         let key = event.getIntegerValueField(.keyboardEventKeycode)
         if type == .keyUp { return swallowedKeys.remove(key) != nil }
         if type == .flagsChanged {
-            if switching && !previewing && !model.dockMode && !event.flags.contains(.maskAlternate) { commit() }
+            if switching && !previewing && !model.dockMode && !model.searching && !event.flags.contains(model.shortcutFlag) { commit() }
             return false
         }
         guard type == .keyDown else { return false }
-        if key == 48 && event.flags.contains(.maskAlternate) && !event.flags.contains(.maskCommand) && !event.flags.contains(.maskControl) {
+        if model.matchesSearchHotkey(key, flags: event.flags) {
+            if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 { openSearchMode() }
+            swallowedKeys.insert(key)
+            return true
+        }
+        if key == 48 && event.flags.intersection([.maskAlternate, .maskCommand, .maskControl]) == model.shortcutFlag {
             if model.dockMode { dismiss() }
             if !switching {
                 guard !cachedWindows.isEmpty else { return false }
-                model.windows = windowsByRecency()
+                model.searching = false
+                model.query = ""
+                model.browserStatus = ""
+                browserSourceApp = NSWorkspace.shared.frontmostApplication
+                model.sourceWindows = windowsByRecency()
+                model.windows = model.sourceWindows
                 model.selected = 0
                 previewing = false
                 switching = true
                 model.step(event.flags.contains(.maskShift) ? -1 : 1)
+                model.userNavigated = false
                 pickerSession = UUID()
                 let session = pickerSession
                 let work = DispatchWorkItem { [weak self] in
@@ -389,11 +447,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch key {
             case 53: dismiss()
             case 36, 76: commit()
+            case 48: model.step(event.flags.contains(.maskShift) ? -1 : 1)
             case 123: model.step(-1)
             case 124: model.step(1)
             case 126: model.step(-model.columns)
             case 125: model.step(model.columns)
-            default: return false
+            default:
+                if (key == 44 || (key == 3 && event.flags.contains(.maskCommand))) && !model.searching {
+                    model.searching = true
+                } else if model.searching {
+                    if key == 51 { if !model.query.isEmpty { model.query.removeLast() } }
+                    else if let copy = event.copy() {
+                        copy.flags = event.flags.intersection([.maskShift, .maskAlphaShift])
+                        if let text = NSEvent(cgEvent: copy)?.characters, !text.isEmpty,
+                           text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.value < 0xF700 }) {
+                            model.query += text
+                        }
+                    }
+                } else { return false }
+                if overlay?.isVisible != true { showOverlay() }
             }
             swallowedKeys.insert(key)
             return true
@@ -411,15 +483,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let availableWidth = min(CGFloat(1600), screen.visibleFrame.width - 48)
         let appearance = model.appearance
         let compact = model.compactPreview
+        let list = model.listSwitcher
         let outerWidth: CGFloat = model.dockMode ? 20 : 52
         let stride = (compact ? 400 : appearance.width) + appearance.spacing
         let maxColumns = max(1, min(Int(appearance.columns), Int((availableWidth - outerWidth + appearance.spacing) / stride)))
-        model.columns = compact ? 1 : min(maxColumns, max(1, model.windows.count))
+        model.columns = (compact || list) ? 1 : min(maxColumns, max(1, model.windows.count))
         let cardsWidth = CGFloat(model.columns) * stride - appearance.spacing + outerWidth
-        let width = min(availableWidth, model.dockMode ? cardsWidth : max(560, cardsWidth))
+        let width = min(availableWidth, list ? (model.switcherPlacement == "From Notch" ? 820 : 340) : model.dockMode ? cardsWidth : max(560, cardsWidth))
         let rows = (max(1, model.windows.count) + model.columns - 1) / model.columns
         let contentHeight = CGFloat(rows) * ((compact ? 74 : appearance.imageHeight + 66) + appearance.spacing) - appearance.spacing + 4
-        let height = min(model.dockMode ? (model.windows.isEmpty ? 160 : contentHeight + 16) : contentHeight + 124, screen.visibleFrame.height - 64)
+        let height = min(list ? (model.switcherPlacement == "From Notch" ? 260 : min(620, Double(max(1, model.windows.count)) * 56 + 148 + (["Left", "Right"].contains(model.switcherPlacement) ? 40 : 0))) : model.dockMode ? (model.windows.isEmpty ? 160 : contentHeight + 16) : contentHeight + 184, screen.visibleFrame.height - 64)
         if overlay == nil {
             let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.level = .popUpMenu
@@ -434,18 +507,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A scroll view with flexible grid columns has no intrinsic width. After
         // removing the Dock header/footer, NSHostingView could shrink to padding
         // alone. Give SwiftUI the computed viewport and keep AppKit in charge.
-        let hostingView = NSHostingView(rootView: SwitcherView(model: model,
-            choose: { [weak self] index in self?.model.selected = index; self?.commit() },
-            action: { [weak self] index, action in self?.performPreviewAction(index, action) })
-            .frame(width: width, height: height))
+        let hostingView = NSHostingView(rootView: Group {
+            if list {
+                ListSwitcher(model: model,
+                    choose: { [weak self] index in self?.model.selected = index; self?.commit() },
+                    settings: { [weak self] in self?.dismiss(); self?.showSetup() })
+            } else {
+                SwitcherView(model: model,
+                    choose: { [weak self] index in self?.model.selected = index; self?.commit() },
+                    action: { [weak self] index, action in self?.performPreviewAction(index, action) })
+            }
+        }.frame(width: width, height: height))
         hostingView.sizingOptions = []
         hostingView.frame = NSRect(x: 0, y: 0, width: width, height: height)
         hostingView.autoresizingMask = [.width, .height]
         overlay?.contentView = hostingView
         overlay?.contentView?.wantsLayer = true
-        overlay?.contentView?.layer?.cornerRadius = appearance.rounded ? 24 : 0
+        overlay?.contentView?.layer?.cornerRadius = !list && appearance.rounded ? 24 : 0
         overlay?.contentView?.layer?.masksToBounds = true
         var frame = NSRect(x: screen.visibleFrame.midX - width / 2, y: screen.visibleFrame.midY - height / 2, width: width, height: height)
+        if list {
+            switch model.switcherPlacement {
+            case "Left": frame.origin.x = screen.frame.minX
+            case "Right": frame.origin.x = screen.frame.maxX - width
+            case "From Notch":
+                // Stay below the physical notch/menu bar; use top-center on displays without a notch.
+                frame.origin.x = min(max(screen.frame.midX - width / 2, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - width - 8)
+                let safeTop = min(screen.visibleFrame.maxY, screen.frame.maxY - screen.safeAreaInsets.top)
+                frame.origin.y = safeTop - height
+            default: break
+            }
+        }
         if model.dockMode, let target = dockTarget {
             let icon = target.frame
             let bottomDistance = abs(icon.minY - screen.frame.minY)
@@ -471,10 +563,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fade.toValue = 1
             fade.duration = 0.18
             fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(fade, forKey: "dockPreviewOpening")
+            layer.add(fade, forKey: "previewOpening")
+
         }
         overlay?.orderFrontRegardless()
-        startPreviews()
+        if !list { startPreviews() }
+        if !model.dockMode && !previewing && model.browserTabsEnabled,
+           browserLoadedSession != pickerSession {
+            browserLoadedSession = pickerSession
+            let apps = model.globalSearch ? NSWorkspace.shared.runningApplications.filter { BrowserTabs.supported.contains($0.bundleIdentifier ?? "") } : [browserSourceApp].compactMap { $0 }.filter { BrowserTabs.supported.contains($0.bundleIdentifier ?? "") }
+            let session = pickerSession
+            let base = model.sourceWindows
+            var batches: [Int: [WindowEntry]] = [:]
+            var remaining = apps.count
+            var failures = 0
+            if !apps.isEmpty { model.browserStatus = "Loading browser tabs…" }
+            for (index, app) in apps.enumerated() {
+                BrowserTabs.load(app: app) { [weak self] entries, status in
+                    guard let self, self.switching, self.pickerSession == session else { return }
+                    batches[index] = entries
+                    remaining -= 1
+                    if !status.isEmpty { failures += 1 }
+                    self.model.browserStatus = remaining > 0 ? "Loading browser tabs…" : failures > 0 ? "Some browser tabs are unavailable. Check TabGlide’s Automation permissions in System Settings." : ""
+                    self.model.sourceWindows = apps.indices.flatMap { batches[$0] ?? [] } + base
+                    self.model.filterResults()
+                    if !self.model.userNavigated && !entries.isEmpty { self.model.selected = 0 }
+                }
+            }
+        }
     }
 
     func pollDock() {
@@ -604,6 +720,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.thumbnails.removeAll()
         overlay?.orderOut(nil)
         switching = false
+        model.searching = false
+        model.globalSearch = false
+        model.sourceWindows = []
+        model.query = ""
+        model.browserStatus = ""
+        browserSourceApp = nil
         previewing = false
         model.dockMode = false
         dockTarget = nil
@@ -615,6 +737,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let entry = model.windows[model.selected]
         let wasPreview = previewing
         dismiss()
+        if !wasPreview, let tab = entry.browserTab {
+            BrowserTabs.activate(tab) { success in
+                if !success {
+                    let alert = NSAlert()
+                    alert.messageText = "That browser tab is no longer available"
+                    alert.informativeText = "Reopen TabGlide to refresh tabs. Check Automation permission if this continues."
+                    alert.runModal()
+                }
+            }
+            return
+        }
+        if !wasPreview, entry.element == nil, let app = entry.app, !app.isTerminated {
+            app.activate(options: [.activateIgnoringOtherApps])
+            return
+        }
         guard !wasPreview, let window = entry.element, let app = entry.app, !app.isTerminated else { return }
         // Update immediately so rapid Option+Tab presses can alternate without waiting for a scan.
         remember(window)
@@ -632,6 +769,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func showPreview() {
         dismiss()
         model.windows = [WindowEntry(element: nil, app: nil, title: "Project workspace", appName: "Editor", minimized: false), WindowEntry(element: nil, app: nil, title: "A little inspiration", appName: "Browser", minimized: false), WindowEntry(element: nil, app: nil, title: "Everything in its place", appName: "Finder", minimized: true)]
+        model.sourceWindows = model.windows
         model.selected = 1
         previewing = true
         switching = true
@@ -641,11 +779,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.previewing == true && self?.pickerSession == session { self?.dismiss() }
         }
     }
+    @objc func openSearchMode() {
+        dismiss()
+        guard model.shortcutReady else { showSetup(); return }
+        model.globalSearch = true
+        model.searching = true
+        model.sourceWindows = windowsByRecency()
+        let represented = Set(model.sourceWindows.compactMap { $0.app?.processIdentifier })
+        model.sourceWindows += NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !represented.contains($0.processIdentifier)
+        }.map { WindowEntry(element: nil, app: $0, title: "Running app", appName: $0.localizedName ?? "Application", minimized: false) }
+        model.filterResults()
+        model.selected = 0
+        model.userNavigated = false
+        switching = true
+        pickerSession = UUID()
+        showOverlay()
+    }
+
+    @objc func showOnboarding() {
+        dismiss()
+        refreshPermission()
+        if onboardingWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 660), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+            window.title = "Welcome to TabGlide"
+            window.minSize = NSSize(width: 740, height: 600)
+            window.titlebarAppearsTransparent = true
+            window.isReleasedWhenClosed = false
+            onboardingWindow = window
+            window.center()
+        }
+        onboardingWindow?.contentView = NSHostingView(rootView: OnboardingView(model: model,
+            grant: { [weak self] in self?.grantAccess() }, previews: { [weak self] in self?.grantPreviewAccess() },
+            recheck: { [weak self] in self?.reconnectPermissions() }, restart: { [weak self] in self?.restartApp() },
+            finish: { [weak self] in
+                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                self?.onboardingWindow?.close()
+            }))
+        NSApp.activate(ignoringOtherApps: true)
+        onboardingWindow?.makeKeyAndOrderFront(nil)
+    }
+
     @objc func showSetup() {
         refreshPermission()
         if setupWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: min(800, (NSScreen.main?.visibleFrame.height ?? 900) - 80)), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "WindowHop Settings"
+            window.title = "TabGlide Settings"
             window.minSize = NSSize(width: 900, height: 620)
             window.titlebarAppearsTransparent = true
             window.isReleasedWhenClosed = false
@@ -678,7 +857,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.removeTap()
                     NSApp.terminate(nil)
                 } else {
-                    self?.model.restartError = "Could not restart. Quit and reopen WindowHop. " + (error?.localizedDescription ?? "")
+                    self?.model.restartError = "Could not restart. Quit and reopen TabGlide. " + (error?.localizedDescription ?? "")
                 }
             }
         }

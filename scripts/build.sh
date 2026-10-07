@@ -14,24 +14,25 @@ fi
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-cache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/module-cache"
 swift build -c release --disable-sandbox --build-system native -debug-info-format none
-APP="$PWD/dist/WindowHop.app"
+APP="$PWD/dist/TabGlide.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 SPARKLE=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp .build/artifacts/sparkle/Sparkle/LICENSE "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 cp Assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp .build/release/WindowHop "$APP/Contents/MacOS/WindowHop"
+cp .build/release/TabGlide "$APP/Contents/MacOS/TabGlide"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>WindowHop</string>
+<key>CFBundleExecutable</key><string>TabGlide</string>
 <key>CFBundleIdentifier</key><string>local.windowhop.app</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleName</key><string>WindowHop</string>
+<key>CFBundleDisplayName</key><string>TabGlide</string>
+<key>CFBundleName</key><string>TabGlide</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0.5</string>
-<key>CFBundleVersion</key><string>6</string>
+<key>CFBundleShortVersionString</key><string>1.0.9</string>
+<key>CFBundleVersion</key><string>10</string>
 <key>SUFeedURL</key><string>https://raw.githubusercontent.com/singhgit2023/WindowHop/main/appcast.xml</string>
 <key>SUEnableAutomaticChecks</key><false/>
 <key>SUAutomaticallyUpdate</key><false/>
@@ -39,7 +40,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSAccessibilityUsageDescription</key><string>WindowHop uses Accessibility to list and focus your open windows.</string>
+<key>NSAppleEventsUsageDescription</key><string>TabGlide reads tab titles and URLs from your frontmost browser and selects the tab you choose.</string>
+<key>NSAccessibilityUsageDescription</key><string>TabGlide uses Accessibility to list and focus your open windows.</string>
 </dict></plist>
 PLIST
 PUBLIC_KEY="$(cat scripts/sparkle-public-key.txt)"

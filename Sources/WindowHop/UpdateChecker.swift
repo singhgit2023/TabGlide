@@ -38,8 +38,8 @@ final class UpdateChecker: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
         guard started else {
             let alert = NSAlert()
-            alert.messageText = "WindowHop Updates"
-            alert.informativeText = startupError ?? "Please reopen WindowHop and try again."
+            alert.messageText = "TabGlide Updates"
+            alert.informativeText = startupError ?? "Please reopen TabGlide and try again."
             alert.runModal()
             return
         }
@@ -60,7 +60,7 @@ struct UpdateSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("UPDATES").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            Text("WindowHop \(updater.installedVersion) (\(updater.installedBuild))")
+            Text("TabGlide \(updater.installedVersion) (\(updater.installedBuild))")
             if let error = updater.startupError {
                 Text(error).font(.system(size: 12)).foregroundStyle(.red)
             }

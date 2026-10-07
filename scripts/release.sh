@@ -2,14 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ./scripts/build.sh
-APP="$PWD/dist/WindowHop.app"
+APP="$PWD/dist/TabGlide.app"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")
 ARCH=$(uname -m)
 # Only the current archive goes into generation; each release has a distinct URL.
 STAGING=$(mktemp -d "$PWD/dist/sparkle-release.XXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
-ARCHIVE="WindowHop-$VERSION-macOS-$ARCH.zip"
+ARCHIVE="TabGlide-$VERSION-macOS-$ARCH.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$STAGING/$ARCHIVE"
 # Refuse to sign with a different Keychain key than the one embedded in the app.
 TOOLS="$PWD/.build/artifacts/sparkle/Sparkle/bin"
@@ -38,6 +38,6 @@ fi
   --embed-release-notes "$STAGING"
 cp "$STAGING/$ARCHIVE" "dist/$ARCHIVE"
 cp "$STAGING/appcast.xml" appcast.xml
-(cd dist && shasum -a 256 "$ARCHIVE" > "WindowHop-$VERSION-SHA256SUMS.txt")
+(cd dist && shasum -a 256 "$ARCHIVE" > "TabGlide-$VERSION-SHA256SUMS.txt")
 echo "Prepared dist/$ARCHIVE and appcast.xml."
 echo 'Publish the ZIP as a GitHub release first, then upload appcast.xml to main.'

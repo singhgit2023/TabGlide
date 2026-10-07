@@ -24,3 +24,7 @@ The initial 1.0.3 release follows the same steps. Its feed offers build 4, so in
 Install 1.0.3 in Applications and keep it running for the test. Build and publish 1.0.4 without replacing that installed copy. In the installed 1.0.3, choose Check for Updates, Install Update, then Install and Relaunch. Confirm General settings reports 1.0.4 (5), your preferences remain, and switching/permissions still work. Check again to verify the up-to-date result.
 
 Automatic checking and installation start disabled. Users can opt in through General settings. Sparkle may defer automatic installation until the app quits. An app in a read-only location, macOS translocation, or filesystem permissions can prevent installation or require an OS prompt. Test the free self-signed distribution on another Mac before broad release.
+
+## TabGlide rename (1.0.6 / build 7)
+
+The product is now TabGlide. New archives are named `TabGlide-VERSION-macOS-arm64.zip`, containing `TabGlide.app`. Keep the existing `WindowHop` Sparkle Keychain account, public key, development certificate, `local.windowhop.app` bundle identifier, and GitHub repository/feed URLs: these are compatibility identifiers, not display names. Existing installs may retain the old `.app` filename after an in-place update; the displayed app name is TabGlide. For a manual installation, quit the old app and replace it with TabGlide, avoiding two running copies. Check permission status after installation; macOS owns permission decisions.

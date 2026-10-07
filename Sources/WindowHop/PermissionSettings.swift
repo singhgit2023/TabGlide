@@ -22,12 +22,12 @@ struct PermissionSettings: View {
             HStack {
                 Image(systemName: model.shortcutReady ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(model.shortcutReady ? .mint : .orange)
-                Text(model.shortcutReady ? "Option + Tab is ready" : (model.trusted ? "Access is enabled; shortcut needs reconnecting" : "Shortcut is waiting for Accessibility"))
+                Text(model.shortcutReady ? model.shortcut + " is ready" : (model.trusted ? "Access is enabled; shortcut needs reconnecting" : "Shortcut is waiting for Accessibility"))
                     .font(.system(size: 12, weight: .medium))
             }
             HStack {
                 Button("Recheck & reconnect", action: recheck)
-                Button("Restart WindowHop", action: restart)
+                Button("Restart TabGlide", action: restart)
             }.buttonStyle(.bordered)
             if let checked = model.permissionsCheckedAt {
                 Text("Checked at \(checked.formatted(date: .omitted, time: .standard)). Updates automatically when you return.")
@@ -35,7 +35,7 @@ struct PermissionSettings: View {
             }
             DisclosureGroup("Enabled in Settings, but still not working?") {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("First try Recheck, then Restart. If this happened after an update, remove the old WindowHop entry in System Settings, add this copy, and enable it again.")
+                    Text("First try Recheck, then Restart. If this happened after an update, remove the old TabGlide entry in System Settings, add this copy, and enable it again.")
                     Text("Use Show app in Finder to locate the exact copy that is running. You can drag it into the permission list, or use + to add it.")
                     Button("Show app in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])

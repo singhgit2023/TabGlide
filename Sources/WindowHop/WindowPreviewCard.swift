@@ -30,7 +30,7 @@ struct WindowPreviewCard: View {
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).help(window.title).accessibilityLabel("Switch to " + window.title)
-                controls
+                if window.browserTab == nil { controls }
             }.frame(height: 54)
         } else {
         VStack(spacing: 10) {
@@ -50,7 +50,7 @@ struct WindowPreviewCard: View {
                         .contentShape(Capsule())
                 }.buttonStyle(.plain).help(window.title + " — " + window.appName)
 
-                controls
+                if window.browserTab == nil { controls }
             }
 
             Button(action: choose) {

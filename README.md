@@ -1,14 +1,16 @@
-# WindowHop
+# TabGlide
 
-<img src="Assets/AppIcon.png" width="128" alt="WindowHop icon">
+Previously WindowHop. The current release is **TabGlide 1.0.9 (build 10)**. The bundle identifier, preferences, signing keys, and existing GitHub update feed are preserved for continuity. The repository remains `singhgit2023/WindowHop`.
 
-[Download WindowHop](https://github.com/singhgit2023/WindowHop/releases/latest)
+<img src="Assets/AppIcon.png" width="128" alt="TabGlide icon">
+
+[Download TabGlide](https://github.com/singhgit2023/WindowHop/releases/latest)
 
 ## Download and install
 
 The initial downloadable build supports **Apple Silicon Macs** running macOS 13+. Thumbnails require macOS 14+. Intel users can build from source on their Mac.
 
-Download the release ZIP, extract it, and move WindowHop.app to Applications before granting permissions. This free release is locally signed and **not Apple-notarized**; macOS may require approval in Privacy & Security before opening it. Review the source before choosing to run it.
+Download the release ZIP, extract it, and move TabGlide.app to Applications before granting permissions. This free release is locally signed and **not Apple-notarized**; macOS may require approval in Privacy & Security before opening it. Review the source before choosing to run it.
 
 Accessibility enables switching and Dock previews. Screen Recording is optional for thumbnails. Use the General settings panel for permission checks and recovery.
 
@@ -19,20 +21,31 @@ See [Publishing in-app updates](docs/publishing-updates.md) for release creation
 
 A native macOS menu bar app for switching between individual windows with **Option + Tab** (Alt + Tab on a PC keyboard). Built with Swift, AppKit, and SwiftUI. Requires macOS 13 or later; window thumbnails require macOS 14 or later.
 
+## New in 1.0.9
+
+- First-launch onboarding, available again from the menu bar.
+- Browser tabs first when switching from a supported browser.
+- Search Mode with **Shift + Command + L** by default; choose another preset in Settings.
+- Search running apps, windows, and tabs across Safari, Chrome, Edge, and Brave. Enable browser integration and grant Automation permission when prompted.
+- Compact list layouts at the left, center, right, or horizontally below the notch, with curved connections and slide-in animation.
+- Configurable switcher shortcut, including Command + Tab, and custom background colors with Liquid, Frosted, Clear, or Solid styles.
+
+Search Mode stays open when you release the shortcut: type to filter, use arrows or Tab to navigate, press Enter to open, or Escape to dismiss. Tab titles and URLs stay in memory on your Mac.
+
 ## Build and run
 
 Install Apple's Command Line Tools (`xcode-select --install`) if needed, then run:
 
 ```sh
 ./scripts/build.sh
-open dist/WindowHop.app
+open dist/TabGlide.app
 ```
 
-Set `WINDOWHOP_SIGNING_IDENTITY` to your own signing certificate, or `-` for ad-hoc development. The maintainer uses a persistent local certificate in an ignored `scripts/signing-identity.txt` file. The script builds for the current Mac architecture. It does not silently fall back to ad-hoc signing. For everyday use, move `dist/WindowHop.app` to Applications **before** granting permission. Distribution to other Macs requires your own Developer ID signing and notarization.
+Set `WINDOWHOP_SIGNING_IDENTITY` to your own signing certificate, or `-` for ad-hoc development. The maintainer uses a persistent local certificate in an ignored `scripts/signing-identity.txt` file. The script builds for the current Mac architecture. It does not silently fall back to ad-hoc signing. For everyday use, move `dist/TabGlide.app` to Applications **before** granting permission. Developer ID signing and notarization are optional for distribution and are not included in this free build.
 
-In the setup screen, click **Open System Settings** and enable WindowHop under **Privacy & Security → Accessibility**. If needed, add the app with the + button. WindowHop checks for permission automatically; quit and reopen it if the shortcut remains unavailable. Rebuilding or moving the app may require removing its old permission entry and adding it again.
+In the setup screen, click **Open System Settings** and enable TabGlide under **Privacy & Security → Accessibility**. If needed, add the app with the + button. TabGlide checks for permission automatically; quit and reopen it if the shortcut remains unavailable. Rebuilding or moving the app may require removing its old permission entry and adding it again.
 
-To enable thumbnails on macOS 14+, click **Allow window previews** in WindowHop Settings and grant **Screen Recording** (called **Screen & System Audio Recording** on some macOS versions). Relaunch the app if macOS requests it. This is optional: the switcher continues with app icons when permission is missing. The Window previews toggle disables capture.
+To enable thumbnails on macOS 14+, click **Allow window previews** in TabGlide Settings and grant **Screen Recording** (called **Screen & System Audio Recording** on some macOS versions). Relaunch the app if macOS requests it. This is optional: the switcher continues with app icons when permission is missing. The Window previews toggle disables capture.
 
 ## Settings window
 
@@ -46,11 +59,11 @@ General contains one System/Light/Dark theme for the entire app, including Setti
 
 ## Permission status and recovery
 
-Settings displays separate live Accessibility and Screen Recording statuses, plus the actual Option + Tab listener state. Checks run every 1.5 seconds and when WindowHop becomes active. Permission is requested only when you click its Enable button.
+Settings displays separate live Accessibility and Screen Recording statuses, plus the actual Option + Tab listener state. Checks run every 1.5 seconds and when TabGlide becomes active. Permission is requested only when you click its Enable button.
 
 - **Enable in Settings / Open Settings** goes directly to the matching macOS privacy pane.
 - **Recheck & reconnect** checks access and recreates the keyboard listener without a full restart.
-- **Restart WindowHop** relaunches the current app and opens Settings again.
+- **Restart TabGlide** relaunches the current app and opens Settings again.
 - **Enabled in Settings, but still not working?** includes recovery steps and **Show app in Finder**, which selects the exact running copy for adding to the permission list.
 
 macOS controls permissions; the app cannot grant them itself. Builds now use the persistent WindowHop Development certificate created in your login keychain. Keep that certificate and its private key: recreating it changes the identity. macOS may request keychain access the first time codesign uses the key. To deliberately select a different signing identity:
@@ -89,7 +102,7 @@ Dock previews stay open after Close, Minimize/Restore, and Quit, and refresh the
 ## Behavior and limitations
 
 - Lists standard windows exposed by each app's Accessibility API, including minimized windows by default. Turn that off in Settings.
-- Tracks recently focused windows while WindowHop is running: the current window comes first and the previous window second, so a quick Option + Tab alternates between them. History resets when the app quits. Focus notifications track changes within an app as well as between apps; periodic polling is a fallback for apps that do not send notifications.
+- Tracks recently focused windows while TabGlide is running: the current window comes first and the previous window second, so a quick Option + Tab alternates between them. History resets when the app quits. Focus notifications track changes within an app as well as between apps; periodic polling is a fallback for apps that do not send notifications.
 - Move the pointer over a card to select it, then release Option to switch. A stationary pointer does not override the keyboard selection when the picker opens.
 - The window list refreshes in the background every 1.5 seconds; newly created or closed windows can briefly lag.
 - Quick switches do not open the picker or start screen capture. Holding Option displays the horizontal grid after 180 ms. Escape cancels pending and visible pickers.

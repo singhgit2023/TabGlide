@@ -7,7 +7,7 @@ struct DockTarget {
 }
 
 final class DockHover {
-    private let queue = DispatchQueue(label: "WindowHop.dockHover", qos: .utility)
+    private let queue = DispatchQueue(label: "TabGlide.dockHover", qos: .utility)
     private var busy = false
 
     func target(at point: CGPoint, completion: @escaping (DockTarget?) -> Void) {

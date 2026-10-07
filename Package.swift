@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "WindowHop",
+    name: "TabGlide",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "WindowHop", targets: ["WindowHop"])],
+    products: [.executable(name: "TabGlide", targets: ["WindowHop"])],
     dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")],
     targets: [.executableTarget(
         name: "WindowHop",

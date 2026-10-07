@@ -18,6 +18,7 @@ enum AppTheme {
 }
 
 struct PreviewAppearance: Codable, Equatable {
+    var tint: [Double]? = nil
     var material = "Liquid"
     var opacity = 0.65
     var rounded = true
@@ -42,6 +43,8 @@ struct PreviewSurface: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius)
+        let components = appearance.tint ?? (scheme == .dark ? [0, 0, 0, 1] : [1, 1, 1, 1])
+        let tint = Color(.sRGB, red: components[0], green: components[1], blue: components[2], opacity: 1)
         ZStack {
             if appearance.material == "Liquid" {
                 shape.fill(.ultraThinMaterial)
@@ -49,7 +52,7 @@ struct PreviewSurface: View {
             } else if appearance.material == "Frosted" {
                 shape.fill(.regularMaterial)
             }
-            shape.fill((scheme == .dark ? Color.black : Color.white).opacity(appearance.opacity * (appearance.material == "Clear" ? 0.7 : 0.32)))
+            shape.fill(tint.opacity(appearance.material == "Solid" ? appearance.opacity : appearance.opacity * (appearance.material == "Clear" ? 0.7 : 0.32)))
         }
     }
 }
@@ -69,7 +72,7 @@ struct SetupView: View {
     @StateObject private var navigation = SettingsNavigation()
     private let pages = [("General", "gearshape", "permissions accessibility recording status appearance theme light dark system"),
                          ("Dock Previews", "dock.rectangle", "appearance liquid frosted clear rounded size hover"),
-                         ("Window Switcher", "rectangle.split.2x2", "appearance liquid frosted clear rounded size shortcut delay")]
+                         ("Window Switcher", "rectangle.split.2x2", "appearance liquid frosted clear rounded size shortcut delay list placement left center right notch")]
     private var dock: Bool { navigation.page == "Dock Previews" }
     private var appearance: Binding<PreviewAppearance> { dock ? $model.dockAppearance : $model.switcherAppearance }
 
@@ -83,7 +86,7 @@ struct SetupView: View {
                         .scaledToFit()
                         .frame(width: 38, height: 38)
                         .accessibilityHidden(true)
-                    Text("WindowHop").font(.system(size: 18, weight: .semibold))
+                    Text("TabGlide").font(.system(size: 18, weight: .semibold))
                 }.padding(.top, 14)
                 TextField("Search settings…", text: $navigation.search).textFieldStyle(.roundedBorder)
                 VStack(alignment: .leading, spacing: 6) {
@@ -97,7 +100,7 @@ struct SetupView: View {
                     }
                 }
                 Spacer()
-                Text("WindowHop · Settings save automatically").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("TabGlide · Settings save automatically").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(18).frame(width: 220).frame(maxHeight: .infinity).background(.bar)
             Divider()
             ScrollView {
@@ -133,16 +136,40 @@ struct SetupView: View {
                             settingSlider("Hover delay", value: $model.dockDelay, range: 0.1...1, step: 0.05, suffix: "s")
                             Text("Click a thumbnail to switch. Close, minimize and quit keep the panel open.").font(.system(size: 12)).foregroundStyle(.secondary)
                         } else {
+                            Picker("Switcher style", selection: $model.switcherStyle) {
+                                Text("Window cards").tag("Cards")
+                                Text("Compact list").tag("List")
+                            }.pickerStyle(.segmented)
+                            if model.switcherStyle == "List" {
+                                SwitcherPlacementPicker(placement: $model.switcherPlacement)
+                                Text("Opens on the display under your pointer. From Notch opens below the notch, or at the top center on displays without one.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            }
+                            Picker("Shortcut", selection: $model.shortcut) {
+                                ForEach(["Option + Tab", "Command + Tab", "Control + Tab"], id: \.self) { Text($0).tag($0) }
+                            }
+                            Text("Command + Tab replaces the macOS app switcher while TabGlide is running. Control + Tab may replace tab navigation in other apps.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            SearchHotkeyPicker(model: model)
+                            Toggle("Include browser tabs", isOn: $model.browserTabsEnabled)
+                            Text("Frontmost browser tabs come first when switching; Search Mode includes all running supported browsers. Safari, Chrome, Edge and Brave. macOS asks for Automation access on first use. Titles and URLs stay in memory. Other browsers are not supported yet.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Button("Open Automation permissions") {
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+                            }
+                            Text("Press / or click Search in the picker, then release the shortcut modifier and type. Search matches app names, titles and tab URLs; Enter opens the selection and Escape closes the picker.").font(.system(size: 12)).foregroundStyle(.secondary)
                             settingSlider("Quick-switch delay", value: $model.switchDelay, range: 0...0.6, step: 0.02, suffix: "s")
-                            Text("Option + Tab switches to the previous window. Hold Option to show the picker; Shift reverses direction. Set delay to zero to show it immediately.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text("Your shortcut switches to the previous window. Hold its modifier to show the picker; Shift reverses direction. Set delay to zero to show it immediately.").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         Divider()
-                        AppearanceControls(appearance: appearance, compact: dock && model.compactDock)
+                        AppearanceControls(appearance: appearance, compact: (dock && model.compactDock) || (!dock && model.switcherStyle == "List"))
                         Divider()
                         sectionTitle("PREVIEW")
-                        AppearancePreviewGrid(appearance: appearance.wrappedValue, compact: dock && model.compactDock)
-                        Text("Six sample windows, scaled to fit. Click a card to compare selected and unselected styles.")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        if !dock && model.switcherStyle == "List" {
+                            Text("Use Preview switcher below to try the compact list in your selected position.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                        } else {
+                            AppearancePreviewGrid(appearance: appearance.wrappedValue, compact: dock && model.compactDock)
+                            Text("Six sample windows, scaled to fit. Click a card to compare selected and unselected styles.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
                         HStack {
                             Button("Preview switcher", action: preview)
                             Spacer()
@@ -211,8 +238,17 @@ private struct AppearanceControls: View {
             }
             sectionTitle("BACKGROUND")
             Picker("Style", selection: $appearance.material) {
-                ForEach(["Liquid", "Frosted", "Clear"], id: \.self) { Text($0).tag($0) }
+                ForEach(["Liquid", "Frosted", "Clear", "Solid"], id: \.self) { Text($0).tag($0) }
             }.pickerStyle(.segmented)
+            ColorPicker("Background color", selection: Binding(get: {
+                let c = appearance.tint ?? [0.2, 0.2, 0.25, 1]
+                return Color(.sRGB, red: c[0], green: c[1], blue: c[2], opacity: 1)
+            }, set: { color in
+                if let c = NSColor(color).usingColorSpace(.sRGB) {
+                    appearance.tint = [c.redComponent, c.greenComponent, c.blueComponent, 1]
+                }
+            }), supportsOpacity: false)
+            Button("Use theme background") { appearance.tint = nil }
             settingSlider("Opacity", value: $appearance.opacity, range: 0.15...1, step: 0.05, suffix: "×")
             Divider()
             sectionTitle("GENERAL APPEARANCE")
