@@ -431,9 +431,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.isReleasedWhenClosed = false
             overlay = panel
         }
-        overlay?.contentView = NSHostingView(rootView: SwitcherView(model: model,
+        // A scroll view with flexible grid columns has no intrinsic width. After
+        // removing the Dock header/footer, NSHostingView could shrink to padding
+        // alone. Give SwiftUI the computed viewport and keep AppKit in charge.
+        let hostingView = NSHostingView(rootView: SwitcherView(model: model,
             choose: { [weak self] index in self?.model.selected = index; self?.commit() },
-            action: { [weak self] index, action in self?.performPreviewAction(index, action) }))
+            action: { [weak self] index, action in self?.performPreviewAction(index, action) })
+            .frame(width: width, height: height))
+        hostingView.sizingOptions = []
+        hostingView.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        hostingView.autoresizingMask = [.width, .height]
+        overlay?.contentView = hostingView
         overlay?.contentView?.wantsLayer = true
         overlay?.contentView?.layer?.cornerRadius = appearance.rounded ? 24 : 0
         overlay?.contentView?.layer?.masksToBounds = true
